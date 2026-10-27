@@ -1,0 +1,15 @@
+{
+  "name": "sedobnaya-atletika",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Съедобная атлетика — мобильная игра-тамагочи про триатлета",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "start": "node scripts/dev-server.mjs",
+    "check": "node scripts/check.mjs",
+    "test": "node --test tests/game.test.mjs",
+    "inspect:balance": "node scripts/inspect-balance.mjs"
+  }
+}

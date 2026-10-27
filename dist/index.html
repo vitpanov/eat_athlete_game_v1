@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#e5f45b">
+<meta name="description" content="Съедобная атлетика: триатлет на подкормке. Корми, тренируй и доведи своего чемпиона от спринта за круассаном до полного фарша — 226 км. Играй в браузере с телефона.">
+<meta property="og:title" content="Съедобная атлетика — триатлет на подкормке">
+<meta property="og:description" content="Есть. Тренить. Повторить. Вырасти своего триатлета и собери все четыре финиша. Бесплатная игра прямо в браузере.">
+<meta property="og:type" content="website">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Съедобная атлетика — триатлет на подкормке</title>
+<link rel="icon" type="image/svg+xml" href="./favicon.svg"><link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="header"><div class="header-inner">
+  <a class="brand club-brand" href="./" aria-label="Съедобная атлетика — главная"><span class="brand-mark" aria-hidden="true"><span data-icon="club"></span></span><span>СЪЕДОБНАЯ<br>АТЛЕТИКА<small>ТРИАТЛЕТ НА ПОДКОРМКЕ</small></span></a>
+  <span class="header-caption">SWIM. BIKE. RUN. EAT. REPEAT.</span>
+  <div class="header-actions"><span class="coin-balance" title="Крошки за тренировки и старты"><span class="coin-icon">✦</span><b id="coins">80</b></span><button id="shareButton" class="icon-button" aria-label="Пригласить друзей" title="Пригласить друзей"><span data-icon="share"></span></button><button id="helpButton" class="icon-button" aria-label="Как играть" title="Как играть">?</button><button id="settingsButton" class="icon-button" aria-label="Настройки"><span data-icon="settings"></span></button></div>
+</div></header>
+<main class="shell">
+  <section class="welcome-line"><div><div class="eyebrow"><span class="live-dot"></span> КЛУБНЫЙ ЛАГЕРЬ · BETA</div><h1 id="greeting">Есть. Тренить. Повторить.</h1><p>Вырасти своего триатлета. Тут все свои — и все немножко голодные.</p></div><div class="day-control"><span class="calendar-icon" data-icon="calendar"></span><div><span class="small-label">ДЕНЬ В ЛАГЕРЕ</span><strong id="dayLabel">01 <span>/ Утро</span></strong></div></div></section>
+  <div id="saveWarning" class="save-warning" hidden>Браузер не разрешает сохранять прогресс. Не закрывай вкладку до конца игры.</div>
+  <div class="main-grid">
+    <section class="scene-card" aria-label="Твой атлет в тренировочном лагере">
+      <div class="scene-top"><button class="athlete-chip" id="renameButton" title="Изменить имя"><span class="avatar-icon" data-icon="person"></span><span><strong id="athleteName">Батон</strong><small id="athleteLevel">LVL 1 · Начинающая булочка</small></span><span class="pencil" data-icon="edit"></span></button><div class="weather-chip"><span data-icon="sun"></span> 23° <span>Погода для аппетита</span></div></div>
+      <canvas id="world" width="1000" height="580" aria-label="Анимированный пиксельный триатлет у моря. Его состояние описано ниже."></canvas>
+      <button class="pet-hit" id="petButton" aria-label="Подбодрить атлета" title="Нажми, чтобы подбодрить"></button>
+      <div id="speech" class="speech" aria-live="polite">Ну что, к первому финишу?</div>
+      <div class="scene-bottom"><span class="scene-status"><span class="live-dot"></span><span id="sceneStatus">Готов к приключениям</span></span><button class="sound-button" id="soundButton" aria-label="Включить звук" title="Включить звук"><span data-icon="soundOff"></span></button></div>
+      <div class="xp-strip"><span>ОПЫТ</span><div><i id="xpFill"></i></div><span id="xpValue">0 / 100 XP</span></div>
+    </section>
+    <aside class="wellbeing panel"><div class="section-heading"><h2>Как ты, чемпион?</h2><span class="mini-label">VITALS</span></div><div id="vitals"></div><div class="fatigue-row"><span><span data-icon="recovery"></span> Усталость <span class="en">Fatigue</span></span><strong id="fatigueValue">10 / 100</strong></div><div class="fatigue-bar"><i id="fatigueFill"></i></div><div class="coach-tip" id="coachTip"><span data-icon="spark"></span><p>Энергия есть. Самое время для лёгкой тренировки.</p></div><button class="sleep-button" id="sleepButton"><span data-icon="moon"></span><span>Выспаться<small>Следующий день · Sleep</small></span><span data-icon="arrow"></span></button></aside>
+    <section class="actions-panel panel" id="actionsPanel"><div class="section-heading"><h2>Что в меню на сегодня?</h2><span class="ap-indicator" id="apLabel" title="4 действия каждый игровой день"></span></div><div class="action-nav"><div class="tabs" role="tablist" aria-label="Действия"><button class="tab active" id="tab-train" data-tab="train" role="tab" aria-selected="true">Тренироваться</button><button class="tab" id="tab-care" data-tab="care" role="tab" aria-selected="false">Позаботиться</button><button class="tab" id="tab-shop" data-tab="shop" role="tab" aria-selected="false">Снаряжение</button></div></div><div id="actionContent" role="tabpanel" aria-labelledby="tab-train"></div></section>
+    <aside class="race-card"><div class="race-kicker"><span>СЛЕДУЮЩАЯ ЦЕЛЬ</span><span data-icon="flag"></span></div><h2 id="raceName">Первый спринт</h2><div class="race-distances" id="raceDistances"></div><div class="race-course" aria-hidden="true"><span>START</span><svg viewBox="0 0 320 54"><path d="M5 37h46c19 0 16-26 37-26h45c22 0 14 30 36 30h46c20 0 14-29 33-29h51" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="5 5"/><circle cx="5" cy="37" r="4"/><path d="M298 4v28m0-28h17v13h-17" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>FINISH</span></div><div class="race-countdown" id="raceCountdown">До старта <b>6 дней</b></div><button id="raceButton" class="race-button">Подготовка к старту <span data-icon="arrow"></span></button><p class="race-footnote" id="raceFootnote">Твой первый финиш ближе, чем кажется.</p></aside>
+  </div>
+  <section class="progress-grid"><div class="skills-panel panel"><div class="section-heading"><h2>Три стороны твоей силы</h2><span class="mini-label">FITNESS</span></div><div id="skills"></div><div class="fitness-note">Форма растёт на тренировках. Отдых помогает тренироваться эффективнее.</div></div><div class="daily-panel panel"><div class="section-heading"><h2>Баланс дня</h2><span class="daily-reward" id="dailyReward">+20 <span>✦</span></span></div><p>Победа над хаосом — тоже победа.</p><div id="dailyTasks"></div></div></section>
+  <section class="journey-panel"><div class="section-heading"><h2>От «попробую» до «я смог»</h2><button class="text-button" id="journalButton">Дневник атлета <span data-icon="arrow"></span></button></div><div class="journey" id="journey"></div></section>
+  <section class="club-invite"><span class="club-invite-icon" data-icon="club"></span><div><h2>Одному вкусно. Со своими — вкуснее.</h2><p>«Съедобная атлетика» — теперь и в кармане. Позови друзей вырастить своего чемпиона.</p></div><button class="invite-button" id="inviteButton">Позвать своих <span data-icon="share"></span></button></section>
+  <footer><span class="footer-brand">СЪЕДОБНАЯ АТЛЕТИКА</span><span>Плыви. Крути. Беги. Ешь.</span><span id="saveStatus"><i class="live-dot"></i> Прогресс сохранён на этом устройстве</span></footer>
+</main>
+<nav class="mobile-nav" aria-label="Быстрая навигация"><button data-nav="camp" class="selected"><span data-icon="home"></span><span>Лагерь</span></button><button data-nav="train"><span data-icon="run"></span><span>Тренить</span></button><button data-nav="care"><span data-icon="food"></span><span>Подкормить</span></button><button data-nav="race"><span data-icon="flag"></span><span>На старт</span></button></nav>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<dialog id="modal"><div id="modalContent"></div></dialog>
+<script type="module" src="./app.js"></script>
+</body></html>

@@ -1,0 +1,65 @@
+{
+  "checkedAt": "2026-10-27T19:51:52.029Z",
+  "node": "v24.22.1",
+  "syntax": "passed",
+  "gameTests": {
+    "passed": 14,
+    "failed": 0
+  },
+  "httpSmoke": [
+    {
+      "path": "/",
+      "status": 200,
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/app.js",
+      "status": 200,
+      "contentType": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "/game.js",
+      "status": 200,
+      "contentType": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "/scene.js",
+      "status": 200,
+      "contentType": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "/style.css",
+      "status": 200,
+      "contentType": "text/css; charset=utf-8"
+    },
+    {
+      "path": "/favicon.svg",
+      "status": 200,
+      "contentType": "image/svg+xml"
+    },
+    {
+      "path": "/README.md",
+      "status": 404
+    },
+    {
+      "path": "/.openai/hosting.json",
+      "status": 404
+    },
+    {
+      "path": "/missing-file.js",
+      "status": 404
+    },
+    {
+      "method": "POST",
+      "status": 405
+    },
+    {
+      "method": "HEAD",
+      "status": 200
+    },
+    {
+      "path": "/%ZZ",
+      "status": 400
+    }
+  ]
+}

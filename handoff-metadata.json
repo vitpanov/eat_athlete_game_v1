@@ -1,0 +1,25 @@
+{
+  "prepared_on": "2026-10-27",
+  "project": "Съедобная атлетика — триатлет на подкормке",
+  "github_repository": "https://github.com/vitpanov/eat_athlete_game_v1",
+  "github_default_branch": "main",
+  "owner_workflow": "phone-only, Codex Cloud",
+  "public_url": "https://sedobnaya-atletika.vitpanov.chatgpt.site",
+  "access_mode": "public",
+  "source_project_id": "appgprj_6ae08717400481919a4501bf9c011a92",
+  "published_version_number": 1,
+  "published_version_id": "appgprj_6ae08717400481919a4501bf9c011a92~appgver_34d0f5322e54819187372bc62e823f02",
+  "published_deployment_id": "appgdep_6ae08defece0819193f1f2c3ffa48d4a",
+  "published_commit": "d50fd8fa0ea9ca499a8690eb016ea275d50e9dda",
+  "frontend_unchanged": true,
+  "save_key": "tribuddy-v1",
+  "save_schema_version": 1,
+  "export_additions": [
+    "portable Node.js dev server",
+    "syntax-check runner",
+    "balance diagnostic",
+    "handoff documentation"
+  ],
+  "contains_credentials": false,
+  "contains_player_saves": false
+}
