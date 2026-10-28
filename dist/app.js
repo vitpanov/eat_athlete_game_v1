@@ -1,4 +1,4 @@
-import {SAVE_KEY,RACES,TRAININGS,GEAR,createGame,restoreGame,level,fitness,readiness,raceIndex,trainingPreview,canTrain,act,sleep,buy,raceEligibility,beginRace,tickRace,useGel,finishRace,formatTime} from './game.js';
+import {SAVE_KEY,RACES,TRAININGS,GEAR,createGame,restoreGame,level,fitness,readiness,raceIndex,trainingPreview,canTrain,clubChallenge,act,sleep,buy,raceEligibility,beginRace,tickRace,useGel,finishRace,personalBests,formatTime} from './game.js';
 import {CampScene} from './scene.js';
 const $=id=>document.getElementById(id);
 const paths={
@@ -42,6 +42,15 @@ function icons(root=document){root.querySelectorAll('[data-icon]').forEach(el=>e
 const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let state=createGame(),storageOk=true,hadCorruptSave=false;
 try{const raw=localStorage.getItem(SAVE_KEY);if(raw)state=restoreGame(raw);}catch(e){hadCorruptSave=true;}
+function ensureProfile(){
+  if(typeof state.profileId==='string' && /^[a-f0-9]{12}$/.test(state.profileId))return;
+  const bytes=new Uint8Array(6);
+  if(globalThis.crypto?.getRandomValues)crypto.getRandomValues(bytes);
+  else for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256);
+  state.profileId=Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join('');
+}
+function profileLabel(){return ['🥐','🍰','🍩','🍓','🍉','🧁','🍋','🍪'][parseInt(state.profileId.slice(0,2),16)%8]+' #'+state.profileId.toUpperCase();}
+ensureProfile();
 let tab='train',intense=false,busy=false,toastTimer,speechTimer,race=null,raceTimer=null,racePaused=false,modalLocked=false,modalMode='',lastPet=0;
 const scene=new CampScene($('world'),()=>state);
 const rank=()=>['Начинающая булочка','Батон на разгоне','Триатлет аль денте','Голодный до финишей','Шеф полного триатлона'][Math.min(4,Math.floor((level(state)-1)/2))];
@@ -55,9 +64,22 @@ function beep(kind='action'){
   try{audioCtx??=new (window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')audioCtx.resume();const notes=kind==='win'?[523,659,784,1047]:kind==='sleep'?[523,392]:[659,880];notes.forEach((hz,i)=>{const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.value=hz;g.gain.value=.035;g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+i*.11+.15);o.connect(g);g.connect(audioCtx.destination);o.start(audioCtx.currentTime+i*.11);o.stop(audioCtx.currentTime+i*.11+.16);});}catch(e){}
 }
 function coach(){if(state.day>=state.nextRaceDay)return 'Старт открыт! Сначала поешь, попей и восстанови энергию.';if(state.ap===0)return 'Все четыре дела сделаны. Ночной сон вернёт энергию.';if(state.energy<30)return 'Энергии мало. Восстановление и сон помогут вернуться в строй.';if(state.fatigue>65)return 'Накопилась усталость. Отдых сейчас полезнее ещё одной тренировки.';if(state.fuel<30)return 'С пустым баком далеко не уедешь. Пора поесть.';if(state.water<30)return 'Пора наполнить флягу. Вода не тратит действие.';return 'Энергия есть. Самое время для тренировки. Не забывай про все три вида.';}
+function nextHint(){
+  if(state.activeRace)return ['Продолжай гонку','race'];
+  if(!state.ap && (state.energy<30||state.fatigue>65||state.fuel<35))return ['Дела закончились — нажми «Выспаться», чтобы начать новый день','sleep'];
+  if(state.energy<30||state.fatigue>65)return ['Отдохни: открой «Подкормить» и выбери восстановление','care'];
+  if(state.fuel<35)return ['Пора поесть: открой «Подкормить» и выбери пасту','care'];
+  if(state.water<35)return ['Наполни флягу во вкладке «Подкормить» — это бесплатно','care'];
+  if(state.day>=state.nextRaceDay)return ['Старт открыт! Нажми «На старт» и проверь готовность','race'];
+  if(!state.ap)return ['Дела закончились — нажми «Выспаться», чтобы начать новый день','sleep'];
+  if(!state.today.training)return ['Начни с тренировки: выбери плавание, велосипед или бег','train'];
+  if(!state.today.meal)return ['Загляни в «Подкормить» и угости атлета пастой','care'];
+  if(!state.today.water)return ['Наполни флягу во вкладке «Подкормить»','care'];
+  return ['Отличный день! Отдыхай или тренируйся, затем нажми «Выспаться»','sleep'];
+}
 function render(){
   document.body.classList.toggle('no-motion',!state.motion);
-  $('coins').textContent=state.coins;$('athleteName').textContent=state.name;$('athleteLevel').textContent=`LVL ${level(state)} · ${rank()}`;
+  $('coins').textContent=state.coins;$('athleteName').textContent=state.name;$('athleteIdentity').textContent=profileLabel();$('athleteLevel').textContent=`LVL ${level(state)} · ${rank()}`;
   const time=['Утро','Позднее утро','День','Вечер','Время спать'][4-state.ap];
   $('dayLabel').innerHTML=`${String(state.day).padStart(2,'0')} <span>/ ${time}</span>`;
   $('greeting').textContent=state.day>=state.nextRaceDay?'Сегодня подают финиш.':state.ap===0?'Замес готов. Пора отдыхать.':'Есть. Тренить. Повторить.';
@@ -66,6 +88,8 @@ function render(){
   $('vitals').innerHTML=vitals.map(([key,label,en,ic,color])=>`<div class="vital ${state[key]<25?'low':''}"><div class="vital-top"><span>${icon(ic)} ${label} <span class="en">${en}</span></span><b>${Math.round(state[key])}<span> / 100</span></b></div><div class="vital-track" role="meter" aria-label="${label}" aria-valuenow="${Math.round(state[key])}" aria-valuemin="0" aria-valuemax="100"><i style="width:${state[key]}%;background:${color}"></i></div></div>`).join('');
   $('fatigueValue').textContent=`${Math.round(state.fatigue)} / 100`;$('fatigueFill').style.width=state.fatigue+'%';$('fatigueFill').style.background=state.fatigue>65?'#df9b7b':'#b2a1c7';
   $('coachTip').innerHTML=icon('spark')+`<p>${coach()}</p>`;
+  const hint=nextHint();$('nextStepText').textContent=hint[0];$('nextStepButton').dataset.hint=hint[1];$('nextStepButton').textContent=({train:'К тренировкам',care:'К заботе',race:'На старт',sleep:'Выспаться'})[hint[1]];
+  const challenge=clubChallenge(state);$('clubChallenge').textContent=challenge.done?'Задание клуба выполнено! +12 крошек ✓':`Задание клуба: ${challenge.name} сегодня · +12 крошек`;
   $('apLabel').innerHTML=Array.from({length:4},(_,i)=>`<i class="${i>=state.ap?'used':''}"></i>`).join('')+`<span>${state.ap}/4 дела</span>`;$('apLabel').setAttribute('aria-label',`Осталось ${state.ap} действия из 4`);
   $('sceneStatus').textContent=state.fatigue>70?'Нужна перезагрузка':state.energy<30?'Заряд на исходе':state.ap===0?'День прожит не зря':state.mood>75?'Готов к приключениям':'Спокойно движемся к цели';
   $('soundButton').innerHTML=icon(state.sound?'soundOn':'soundOff');$('soundButton').setAttribute('aria-label',state.sound?'Выключить звук':'Включить звук');$('soundButton').title=state.sound?'Выключить звук':'Включить звук';
@@ -95,7 +119,7 @@ function renderActions(){
       {id:'water',title:'Наполнить флягу',en:'Stay hydrated',desc:'+45 воды · 3 фляги в день',ic:'drop',color:'blue',gain:'Бесплатно',cost:'0 дел',disabled:state.water>=95?'Воды достаточно':state.today.drinks>=3?'Три фляги уже выпиты':''},
       {id:'rest',title:'Восстановиться',en:'Recover',desc:'+22 энергии, −24 усталости',ic:'recovery',color:'purple',gain:'Бесплатно',cost:'1 дело',disabled:noAp},
       {id:'joy',title:'Прогулка за кофе',en:'Enjoy life',desc:'+30 настроения, +10 энергии',ic:'leaf',color:'green',gain:'Бесплатно',cost:'1 дело',disabled:noAp},
-      {id:'dessert',title:'Клубный десерт',en:'A little treat',desc:'+20 настроения, +18 сытости, +5 энергии',ic:'cake',color:'orange',gain:'15 ✦',cost:'0 дел · 1 в день',disabled:state.today.dessert?'Десерт дня уже съеден':state.coins<15?'Нужно 15 крошек':''}
+      {id:'dessert',title:'Десерт: '+['круассан финишёра','тирамису с характером','эклер на разгоне','сырник чемпиона'][(state.day-1)%4],en:'Клубный десерт дня',desc:'+20 настроения, +18 сытости, +5 энергии',ic:'cake',color:'orange',gain:'15 ✦',cost:'0 дел · 1 в день',disabled:state.today.dessert?'Десерт дня уже съеден':state.coins<15?'Нужно 15 крошек':''}
     ].map(x=>card({...x,disabled:locked?'Атлет занят':x.disabled})).join('')}</div><p class="action-note">${icon('heart')} Еда — топливо. Десерт — удовольствие. Отдых — по плану.</p>`;
   }else{
     $('actionContent').innerHTML=`<div class="action-cards shop-cards">${GEAR.map(g=>{const owned=state.gear.includes(g.id),kit=['sunset','violet'].includes(g.id);return card({id:g.id,title:g.name,desc:g.desc,ic:g.icon,color:g.color,gain:owned?(kit?(state.kit===g.id?'Надето':'Надеть'):'Куплено'):`${g.price} ✦`,cost:owned?'': 'Навсегда',buyItem:true,owned,disabled:locked?'Атлет занят':owned&&!kit?'Уже в твоём снаряжении':!owned&&state.coins<g.price?`Нужно ещё ${g.price-state.coins} крошек`:''});}).join('')}</div><p class="action-note">${icon('bag')} Крошки за тренировки, баланс дня и финиши. Все покупки — игровые.</p>`;
@@ -113,12 +137,12 @@ function action(id){if(busy||race)return;afterAction(act(state,id,intense));}
 function openModal(content,mode='',locked=false){modalMode=mode;modalLocked=locked;$('modalContent').innerHTML=content;if(!$('modal').open)$('modal').showModal();}
 function modalShell(content,eyebrow='',close=true){return `<div class="modal-inner">${close?`<button class="modal-close" data-modal="close" aria-label="Закрыть">${icon('close')}</button>`:''}${eyebrow?`<div class="modal-eyebrow">${eyebrow}</div>`:''}${content}</div>`;}
 function closeModal(){if(modalLocked)return;$('modal').close();modalMode='';}
-function welcome(){openModal(modalShell(`<h2>Накорми своего<br>внутреннего триатлета.</h2><p>Добро пожаловать в «Съедобную атлетику»! Здесь есть место и большим финишам, и десерту после тренировки.</p><div class="welcome-illustration"><span>${icon('swim')}</span><span>${icon('bike')}</span><span>${icon('run')}</span></div><form id="welcomeForm"><label class="form-label" for="welcomeName">Как назовём твою булочку?</label><input id="welcomeName" class="name-input" maxlength="24" value="${esc(state.name)}" autocomplete="off"><button class="modal-primary" type="submit">Начать нашу историю ${icon('arrow')}</button></form><p class="modal-small">4 дела в день. Первый старт — на 7-й день.<br>Когда ты закрываешь игру, время останавливается.<br>У каждого игрока своё сохранение в браузере.</p>`,'СЪЕДОБНАЯ АТЛЕТИКА × TRIBUDDY'),'welcome');}
+function welcome(){openModal(modalShell(`<h2>Накорми своего<br>внутреннего триатлета.</h2><p>Добро пожаловать в «Съедобную атлетику»! Здесь есть место и большим финишам, и десерту после тренировки.</p><div class="welcome-illustration"><span>${icon('swim')}</span><span>${icon('bike')}</span><span>${icon('run')}</span></div><form id="welcomeForm"><label class="form-label" for="welcomeName">Как назовём твою булочку?</label><input id="welcomeName" class="name-input" maxlength="24" value="${esc(state.name)}" autocomplete="off"><button class="modal-primary" type="submit">Начать нашу историю ${icon('arrow')}</button></form><p class="modal-small">4 дела в день. Первый старт — на 3-й игровой день.<br>Когда ты закрываешь игру, время останавливается.<br>У каждого игрока своё сохранение в браузере.</p>`,'СЪЕДОБНАЯ АТЛЕТИКА × TRIBUDDY'),'welcome');}
 function help(){openModal(modalShell(`<h2>Забота. Движение.<br>И немного терпения.</h2><div class="rules-list">${[
  ['Планируй четыре дела','Тренировка, еда, восстановление и прогулка тратят по одному действию. Вода бесплатна: до трёх фляг в день.'],
  ['Следи за балансом','Energy — энергия, Fuel — сытость, Hydration — вода, Mood — настроение. Высокая усталость снижает прирост навыков.'],
  ['Спи и становись сильнее','Кнопка «Выспаться» завершает день. С едой и водой сон возвращает больше энергии. Пропущенные реальные дни не вредят атлету.'],
- ['Выходи на старт','Первый старт — на 7-й день. В гонке выбирай темп и используй один гель. Бережный темп экономит силы. После финиша открывается следующая дистанция.'],
+ ['Выходи на старт','Первый старт — на 3-й игровой день. В гонке выбирай темп и используй один гель. Бережный темп экономит силы. После финиша открывается следующая дистанция.'],
  ['Собирай маленькие победы','За тренировки и гонки — крошки. За тренировку + еду + воду в один день — ещё 20. В магазине можно улучшить снаряжение и сменить костюм.']
  ].map(([h,p],i)=>`<div class="rule-item"><span class="rule-number">0${i+1}</span><div><b>${h}</b><p>${p}</p></div></div>`).join('')}</div><button class="modal-primary" data-modal="close">Понятно. Погнали! ${icon('arrow')}</button><p class="modal-small">Игровая модель: цифры и дистанции здесь служат механике игры.</p>`,'HOW TO PLAY'),'help');}
 function rename(){openModal(modalShell(`<h2>Имя твоего атлета</h2><form id="renameForm"><label class="form-label" for="newName">Имя или прозвище</label><input class="name-input" id="newName" maxlength="24" value="${esc(state.name)}" autocomplete="off"><button class="modal-primary" type="submit">Сохранить ${icon('check')}</button></form>`,'YOUR ATHLETE'),'rename');setTimeout(()=>$('newName')?.select(),50);}
@@ -157,10 +181,12 @@ function endRace(){clearInterval(raceTimer);raceTimer=null;const record=finishRa
   openModal(modalShell(`<div class="race-trophy">${icon(record.success?'trophy':'heart')}</div><div style="text-align:center"><div class="modal-eyebrow">${record.success?'YOU DID IT!':'COME BACK STRONGER'}</div><h2 style="margin-right:0">${record.success?'Ты — финишер!':'Сегодня победил опыт.'}</h2><p>${record.success?`${target.name} позади. Этот финиш уже никто не отнимет.`:'Силы закончились. Дай себе восстановиться и попробуй бережный темп.'}</p></div>${record.success?`<div class="result-time">${formatTime(record.minutes)}</div><div class="result-splits">${record.splits.map((t,i)=>`<div><span>${['Swim','Bike','Run'][i]}</span><b>${formatTime(t)}</b></div>`).join('')}</div>`:''}<div class="result-reward">+${record.reward} ✦ крошек · +${record.success?100:30} XP</div><button class="modal-primary" data-modal="shareResult">Рассказать своим ${icon('share')}</button><button class="modal-secondary" data-modal="close">Вернуться в лагерь</button><p class="modal-small">Следующий старт — в день ${state.nextRaceDay}. А сейчас — заслуженный сон.</p>`,'',true),'result');
 }
 function journal(){const names={first:'Первый шаг',triple:'Три стихии',finisher:'Финишер',half:'70.3 в сердце',iron:'Полная дистанция'};
-  openModal(modalShell(`<h2>Твоя история в движении.</h2><div class="modal-summary"><div class="summary-chip"><small>ТРЕНИРОВОК</small><b>${Object.values(state.trainingCounts).reduce((a,b)=>a+b,0)}</b></div><div class="summary-chip"><small>ФИНИШЕЙ В ЖУРНАЛЕ</small><b>${state.raceHistory.filter(r=>r.success).length}</b></div><div class="summary-chip"><small>ДНЕЙ В ПУТИ</small><b>${state.day}</b></div></div>${state.badges.length?`<div class="badge-list">${state.badges.map(b=>`<span class="badge-item">✦ ${names[b]||esc(b)}</span>`).join('')}</div>`:''}${state.raceHistory.length?`<div class="journal-list">${state.raceHistory.slice(0,5).map(r=>`<div class="journal-row">${icon('trophy')}<div><small>ДЕНЬ ${r.day} · ${esc(r.race)}</small><p>${r.success?`Финиш · ${formatTime(r.minutes)}`:'Сход с дистанции'}</p></div></div>`).join('')}</div>`:''}<div class="journal-list">${state.log.slice(0,20).map(l=>`<div class="journal-row">${icon(l.icon)}<div><small>ДЕНЬ ${l.day}</small><p>${esc(l.text)}</p></div></div>`).join('')}</div>`,'THE LITTLE WINS MATTER'),'journal');}
+  const best=personalBests(state).map(r=>`<div class="journal-row">${icon('trophy')}<div><small>${esc(r.name)}</small><p>${r.minutes===null?'Пока нет финиша':formatTime(r.minutes)}</p></div></div>`).join('');
+  const history=state.raceHistory.map(r=>`<div class="journal-row">${icon('flag')}<div><small>ДЕНЬ ${esc(r.day)} · ${esc(r.race)}</small><p>${r.success&&Number.isFinite(r.minutes)?`Финиш · ${formatTime(r.minutes)}`:'Сход с дистанции'}</p></div></div>`).join('');
+  openModal(modalShell(`<h2>Твоя история в движении.</h2><p>${esc(state.name)} ${esc(profileLabel())} · этот браузер</p><div class="modal-summary"><div class="summary-chip"><small>ТРЕНИРОВОК</small><b>${Object.values(state.trainingCounts).reduce((a,b)=>a+b,0)}</b></div><div class="summary-chip"><small>ФИНИШЕЙ</small><b>${state.raceHistory.filter(r=>r.success).length}</b></div><div class="summary-chip"><small>ДНЕЙ В ПУТИ</small><b>${state.day}</b></div></div>${state.badges.length?`<div class="badge-list">${state.badges.map(b=>`<span class="badge-item">✦ ${names[b]||esc(b)}</span>`).join('')}</div>`:''}<h3>Личные рекорды</h3><p>Лучшее время на каждой дистанции — только твои результаты.</p><div class="journal-list">${best}</div><h3>История стартов</h3>${history?`<div class="journal-list">${history}</div>`:'<p>Первый старт ещё впереди.</p>'}<h3>Последние события</h3><div class="journal-list">${state.log.slice(0,20).map(l=>`<div class="journal-row">${icon(l.icon)}<div><small>ДЕНЬ ${esc(l.day)}</small><p>${esc(l.text)}</p></div></div>`).join('')}</div><p class="modal-small">История хранится только в этом браузере. Результаты, удалённые прежней версией игры, восстановить нельзя.</p>`,'ДНЕВНИК АТЛЕТА'),'journal');}
 async function shareGame(withResult=false){
   const last=state.raceHistory[0];
-  const text=withResult&&last?.success?`Мой атлет ${state.name} прошёл ${last.race} за ${formatTime(last.minutes)}! Съедобная атлетика: есть, тренить, повторить. Вырастишь своего?`:'Съедобная атлетика: триатлет на подкормке. Есть, тренить, повторить! Вырасти своего чемпиона — от спринта за круассаном до 226 км.';
+  const text=withResult&&last?.success?`Мой атлет ${state.name} ${profileLabel()} прошёл ${last.race} за ${formatTime(last.minutes)}! Съедобная атлетика: есть, тренить, повторить. Вырастишь своего?`:'Съедобная атлетика: триатлет на подкормке. Есть, тренить, повторить! Вырасти своего чемпиона — от спринта за круассаном до 226 км.';
   const url=location.origin+'/';
   if(navigator.share){try{await navigator.share({title:'Съедобная атлетика',text,url});return;}catch(e){if(e.name==='AbortError')return;}}
   try{await navigator.clipboard.writeText(text+'\n'+url);toast('Текст и ссылка скопированы. Отправь своим!');}
@@ -180,6 +206,7 @@ document.addEventListener('click',e=>{
     else if(b.dataset.nav==='race')racePrep();
     else{tab=b.dataset.nav;render();$('actionsPanel').scrollIntoView({behavior:motion?'smooth':'instant',block:'start'});}
   }
+  if(b.dataset.hint){const hint=b.dataset.hint;if(hint==='sleep')askSleep();else if(hint==='race'){if(!race)racePrep();}else{tab=hint;render();$('actionsPanel').scrollIntoView({behavior:state.motion&&!matchMedia('(prefers-reduced-motion: reduce)').matches?'smooth':'instant',block:'start'});}}
   if(b.dataset.tab){tab=b.dataset.tab;render();}
   if(b.dataset.intensity){intense=b.dataset.intensity==='hard';renderActions();}
   if(b.dataset.action)action(b.dataset.action);
@@ -198,7 +225,7 @@ document.addEventListener('click',e=>{
   if(m==='resumeRace'&&race){racePaused=false;renderRaceModal();}
   if(m==='withdrawConfirm'&&race){race.finished=true;race.success=false;endRace();}
   if(m==='resetAsk')openModal(modalShell(`<h2>Начать с чистого листа?</h2><p>Навыки, покупки, крошки и история стартов этого атлета будут удалены. Отменить это действие не получится.</p><button class="modal-primary" data-modal="resetConfirm">Начать новую историю</button><button class="modal-secondary" data-modal="settings">Сохранить мой прогресс</button>`,'A NEW CHAPTER'),'reset');
-  if(m==='resetConfirm'){const name=state.name;state=createGame(name);state.welcomed=true;closeModal();tab='train';intense=false;save();render();speak('Новая история. Большие мечты.');toast('Новая история началась.');}
+  if(m==='resetConfirm'){const name=state.name;state=createGame(name);ensureProfile();state.welcomed=true;closeModal();tab='train';intense=false;save();render();speak('Новая история. Большие мечты.');toast('Новая история началась.');}
   if(m==='settings')settings();
   if(m==='help')help();
   if(m==='shareResult')shareGame(true);

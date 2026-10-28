@@ -25,7 +25,7 @@ export const readiness=s=>Math.round(clamp(s.energy*.34+s.fuel*.2+s.water*.16+s.
 export const raceIndex=s=>Math.min(s.wins.length,3);
 export function createGame(name='Батон'){
   return {version:1,name:name.trim().slice(0,24)||'Батон',day:1,ap:4,energy:84,fuel:76,water:78,mood:85,fatigue:10,
-    skills:{swim:18,bike:22,run:20},xp:0,coins:80,gear:[],kit:'mint',wins:[],raceHistory:[],nextRaceDay:7,
+    skills:{swim:18,bike:22,run:20},xp:0,coins:80,gear:[],kit:'mint',wins:[],raceHistory:[],nextRaceDay:3,
     trainingCounts:{swim:0,bike:0,run:0},today:{training:false,meal:false,water:false,bonus:false,drinks:0,dessert:false},
     log:[{day:1,text:'Ты в «Съедобной атлетике». Здесь тренируются с аппетитом!',icon:'flag'}],badges:[],sound:false,motion:true,welcomed:false};
 }
@@ -41,13 +41,19 @@ export function restoreGame(raw){
   for(const k of ['gear','wins','raceHistory','log','badges'])if(!Array.isArray(s[k]))s[k]=[];
   s.gear=s.gear.filter(id=>GEAR.some(g=>g.id===id));
   s.trainingCounts={...createGame().trainingCounts,...d.trainingCounts};s.today={...createGame().today,...d.today};
-  s.nextRaceDay=Math.max(1,Number.isFinite(d.nextRaceDay)?Math.floor(d.nextRaceDay):7);
+  s.nextRaceDay=Math.max(1,Number.isFinite(d.nextRaceDay)?Math.floor(d.nextRaceDay):3);
+  // Existing first-time players can also enjoy the earlier first start.
+  if(s.nextRaceDay===7 && !s.wins.length && !s.raceHistory.length && !d.activeRace) s.nextRaceDay=3;
   if(!['mint','sunset','violet'].includes(s.kit))s.kit='mint';
   return s;
 }
 function addLog(s,text,icon='spark'){s.log.unshift({day:s.day,text,icon});s.log=s.log.slice(0,35);}
 function rewardDaily(s){
   if(s.today.training&&s.today.meal&&s.today.water&&!s.today.bonus){s.today.bonus=true;s.coins+=20;addLog(s,'Дневной баланс: тренировка, еда и вода. +20 крошек!','check');return true;}return false;
+}
+export function clubChallenge(s){
+  const id=['swim','bike','run'][(s.day-1)%3];
+  return {id,name:TRAININGS[id].name,done:!!s.today.clubBonus};
 }
 function badges(s){
   const list=[];
@@ -98,14 +104,18 @@ export function act(s,id,intense=false){
     if(s.today.dessert)return {ok:false,message:'Десерт дня уже съеден. Новая порция — завтра!'};
     if(s.coins<15)return {ok:false,message:'Для десерта нужно 15 крошек. За тренировку дают 8.'};
     s.coins-=15;s.fuel=clamp(s.fuel+18);s.mood=clamp(s.mood+20);s.energy=clamp(s.energy+5);s.today.dessert=true;
-    text='Клубный десерт: +20 настроения, +18 сытости, +5 энергии. Вкусно жить!';animation='eat';
+    const treat=['круассан финишёра','тирамису с характером','эклер на разгоне','сырник чемпиона'][((s.day-1)%4)];
+    text=`Клубный десерт сегодня — ${treat}: +20 настроения, +18 сытости, +5 энергии. Вкусно жить!`;animation='eat';
   }else if(id==='joy'){
     if(s.ap<1)return {ok:false,message:'Прогуляемся завтра. Сейчас пора спать.'};
     s.ap--;s.mood=clamp(s.mood+30);s.energy=clamp(s.energy+10);s.fatigue=clamp(s.fatigue-8);text='Прогулка у моря: +30 настроения, +10 энергии.';animation='walk';
   }else return {ok:false,message:'Неизвестное действие'};
   addLog(s,text,TRAININGS[id]?id:id==='meal'?'food':id==='water'?'drop':'heart');
-  const bonus=rewardDaily(s);const fresh=badges(s);
-  return {ok:true,message:text+(bonus?' Бонус дня: +20 крошек!':''),animation,badges:fresh};
+  const bonus=rewardDaily(s);
+  let clubBonus=false;
+  if(id===clubChallenge(s).id&&!s.today.clubBonus){s.today.clubBonus=true;s.coins+=12;clubBonus=true;addLog(s,'Клубное задание выполнено: +12 крошек!', 'spark');}
+  const fresh=badges(s);
+  return {ok:true,message:text+(bonus?' Бонус дня: +20 крошек!':'')+(clubBonus?' Клубное задание: +12 крошек!':''),animation,badges:fresh};
 }
 export function sleep(s){
   const good=s.fuel>=30&&s.water>=25;
@@ -153,11 +163,18 @@ export function finishRace(s,r){
   if(!r.finished||r.recorded)return null;r.recorded=true;
   const c=RACES[r.index];const reward=r.success?c.reward:35;
   s.energy=clamp(Math.round(r.stamina*.5),8,100);s.fuel=clamp(s.fuel-35);s.water=clamp(s.water-28);s.fatigue=clamp(s.fatigue+30);s.mood=clamp(s.mood+(r.success?22:-8));s.coins+=reward;s.xp+=r.success?100:30;s.ap=0;
-  const record={day:s.day,race:c.short,index:r.index,minutes:r.minutes,splits:r.splits.slice(),success:r.success};s.raceHistory.unshift(record);s.raceHistory=s.raceHistory.slice(0,30);
+  const record={day:s.day,race:c.short,index:r.index,minutes:r.minutes,splits:r.splits.slice(),success:r.success};s.raceHistory.unshift(record);
   if(r.success&&s.wins.length<=r.index)s.wins.push(r.index);
   s.nextRaceDay=s.day+(r.success?7:3);
   addLog(s,r.success?`${c.short}: финиш! +${reward} крошек. Следующий старт — день ${s.nextRaceDay}.`:`Старт остановлен: силы закончились. Восстановимся и попробуем в день ${s.nextRaceDay}.`,'flag');
   return {...record,reward,badges:badges(s)};
+}
+// The club leaderboard needs a server; these are the athlete's own best results.
+export function personalBests(s){
+  return RACES.map((race,index)=>{
+    const results=s.raceHistory.filter(r=>r&&r.success===true&&r.index===index&&Number.isFinite(r.minutes)&&r.minutes>=0);
+    return {index,name:race.short,minutes:results.length?Math.min(...results.map(r=>r.minutes)):null};
+  });
 }
 export function formatTime(minutes){
   const seconds=Math.round(minutes*60);const h=Math.floor(seconds/3600);const m=Math.floor((seconds%3600)/60);const sec=seconds%60;

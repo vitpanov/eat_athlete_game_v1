@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,restoreGame,act,sleep,buy,canTrain,trainingPreview,beginRace,tickRace,useGel,finishRace,RACES,raceIndex} from '../dist/game.js';
+import {createGame,restoreGame,act,sleep,buy,canTrain,clubChallenge,trainingPreview,beginRace,tickRace,useGel,finishRace,personalBests,RACES,raceIndex} from '../dist/game.js';
 
 test('A day has four actions; hydration does not spend one',()=>{
   const s=createGame();act(s,'water');assert.equal(s.ap,4);act(s,'swim');act(s,'meal');act(s,'rest');act(s,'run');
   assert.equal(s.ap,0);assert.equal(act(s,'bike').ok,false);assert.equal(act(s,'meal').ok,false);
 });
 test('Daily balance gives the reward exactly once',()=>{
-  const s=createGame();act(s,'swim');act(s,'meal');act(s,'water');assert.equal(s.coins,108);
-  act(s,'run');assert.equal(s.coins,116);assert.equal(s.today.bonus,true);
+  const s=createGame();act(s,'swim');act(s,'meal');act(s,'water');assert.equal(s.coins,120);
+  act(s,'run');assert.equal(s.coins,128);assert.equal(s.today.bonus,true);
 });
 test('Low fuel and water block training without changing state',()=>{
   for(const key of ['fuel','water']){const s=createGame();s[key]=3;const before=JSON.stringify(s);assert.equal(act(s,'run').ok,false);assert.equal(JSON.stringify(s),before);}
@@ -72,4 +72,25 @@ test('Save and resume preserve progress, including an active race',()=>{
 test('Long play always keeps care metrics within bounds',()=>{
   const s=createGame();const actions=['swim','bike','run','meal','water','rest','joy'];
   for(let i=0;i<500;i++){act(s,actions[i%actions.length],i%5===0);if(i%8===0)sleep(s);for(const k of ['energy','fuel','water','mood','fatigue'])assert.ok(s[k]>=0&&s[k]<=100,`${k}: ${s[k]}`);}
+});
+
+test('First race opens on day three and existing first-time saves get the earlier start',()=>{
+  const s=createGame();assert.equal(s.nextRaceDay,3);sleep(s);assert.equal(beginRace(s).ok,false);sleep(s);assert.equal(beginRace(s).ok,true);
+  const old=createGame();old.nextRaceDay=7;old.day=2;const restored=restoreGame(JSON.stringify(old));assert.equal(restored.nextRaceDay,3);
+  old.wins=[0];old.raceHistory=[{success:true}];assert.equal(restoreGame(JSON.stringify(old)).nextRaceDay,7);
+});
+test('Club challenge rotates, pays once, and survives save and next day',()=>{
+  const s=createGame();assert.equal(clubChallenge(s).id,'swim');act(s,'swim');assert.equal(s.coins,100);assert.equal(clubChallenge(s).done,true);
+  act(s,'swim');assert.equal(s.coins,108);const restored=restoreGame(JSON.stringify(s));assert.equal(clubChallenge(restored).done,true);
+  sleep(restored);assert.equal(clubChallenge(restored).id,'bike');assert.equal(clubChallenge(restored).done,false);const before=restored.coins;assert.equal(act(restored,'bike').ok,true);assert.equal(restored.coins,before+20);
+});
+
+test('Personal records use the fastest successful time per distance',()=>{
+  const s=createGame();s.raceHistory=[{index:0,success:true,minutes:90},{index:0,success:true,minutes:75},{index:0,success:false,minutes:10},{index:1,success:true,minutes:120}];
+  assert.equal(personalBests(s)[0].minutes,75);assert.equal(personalBests(s)[1].minutes,120);assert.equal(personalBests(s)[2].minutes,null);
+});
+test('Race history keeps more than thirty results and survives restoration',()=>{
+  const s=createGame();s.day=3;
+  for(let i=0;i<35;i++){const r=beginRace(s);assert.equal(r.ok,true);r.finished=true;r.success=true;r.minutes=60+i;finishRace(s,r);s.energy=100;s.fuel=100;s.water=100;s.day=s.nextRaceDay;}
+  const restored=restoreGame(JSON.stringify(s));assert.equal(restored.raceHistory.length,35);assert.equal(personalBests(restored)[0].minutes,60);
 });
